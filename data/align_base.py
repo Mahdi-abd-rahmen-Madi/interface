@@ -132,8 +132,8 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
         
         if best_match:
             # The polygon is already inside a reference polygon
-            attributes["alignment_status"] = "aligned"
-            attributes["reference_area"] = best_match.area
+            attributes["alignment"] = "aligned"
+            attributes["ref_area"] = best_match.area
             aligned_data.append({**attributes, "geometry": target_geom})
         else:
             # Find the nearest reference polygon and check the distance
@@ -151,13 +151,13 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
                 adjusted_geom = translate_polygon_to_point(target_geom, new_centroid)
                 
                 # Add the adjusted polygon to the aligned data
-                attributes["alignment_status"] = "adjusted"
-                attributes["reference_area"] = nearest_ref.area
+                attributes["alignment"] = "adjusted"
+                attributes["ref_area"] = nearest_ref.area
                 aligned_data.append({**attributes, "geometry": adjusted_geom})
             else:
                 # No valid reference polygon found within the distance threshold, mark as "not_aligned"
-                attributes["alignment_status"] = "not_aligned"
-                attributes["reference_area"] = 0
+                attributes["alignment"] = "not_aligned"
+                attributes["ref_area"] = 0
                 unaligned_data.append({**attributes, "geometry": target_geom})
     
     logging.info(f"Matched {len(aligned_data)} target polygons to reference polygons (fully inside or adjusted).")
@@ -256,8 +256,8 @@ def batch_process_shapefiles(output_dir, output_format="shp", target_crs="EPSG:2
     """
     logging.info("Starting shapefile alignment with hardcoded paths...")
     os.makedirs(output_dir, exist_ok=True)
-    target_shapefile_path = "/home/mahdi/app/data/shapefiles/roof.shp"
-    reference_shapefile_path = "/home/mahdi/app/data/output/merged_polygons.shp"
+    target_shapefile_path = "/home/mahdi/interface/data/shapefiles/roof.shp"
+    reference_shapefile_path = "/home/mahdi/interface/data/output/merged_polygons.shp"
     process_shapefiles(target_shapefile_path, reference_shapefile_path, output_dir, output_format=output_format, target_crs=target_crs, max_distance=max_distance)
     logging.info("Shapefile alignment completed.")
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     configure_logging()
     
     # Define output directory
-    output_dir = "/home/mahdi/app/data/output"
+    output_dir = "/home/mahdi/interface/data/output"
     
     # Run batch processing with hardcoded paths
     batch_process_shapefiles(output_dir, output_format="shp", target_crs="EPSG:2154", max_distance=25)

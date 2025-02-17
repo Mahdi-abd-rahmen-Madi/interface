@@ -51,8 +51,8 @@ def merge_adjacent_small_polygons(input_shapefile, output_dir, min_area=1000):
 
 # Example usage:
 if __name__ == "__main__":
-    reference_shapefile_path = "/home/mahdi/app/data/shapefiles/reference.shp"
-    output_dir = "/home/mahdi/app/data/output"
+    reference_shapefile_path = "/home/mahdi/interface/data/shapefiles/reference.shp"
+    output_dir = "/home/mahdi/interface/data/output"
 
     # Merge adjacent small polygons (< 1000 sqm) and save the result
     merge_adjacent_small_polygons(reference_shapefile_path, output_dir, min_area=1000)
