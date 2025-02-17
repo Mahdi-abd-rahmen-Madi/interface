@@ -63,13 +63,12 @@ def load_to_postgis(shapefile, layer_name, postgis_config):
     port = postgis_config.get("port", "5432")
     dbname = postgis_config.get("dbname", "roofs")
     user = postgis_config.get("user", "mahdi")
+    password = postgis_config.get("password", "mahdi")
     schema = postgis_config.get("schema", "public")
     table_name = os.path.splitext(os.path.basename(shapefile))[0]
-    
-    # Connection string without password (handled by .pgpass)
-    pg_connection = f"PG:host={host} port={port} dbname={dbname} user={user}"
 
-    # Load shapefile into PostGIS
+    pg_connection = f"PG:host={host} port={port} dbname={dbname} user={user} password={password}"
+
     load_cmd = [
         "ogr2ogr",
         "-f", "PostgreSQL",
@@ -90,12 +89,12 @@ def load_to_postgis(shapefile, layer_name, postgis_config):
         logging.error(f"Failed to load {shapefile} into PostGIS: {e.stderr}")
         raise
 
-    # Create SPGiST index
     create_index_cmd = [
         "psql",
         "-h", host,
         "-p", str(port),
         "-d", dbname,
+        "-U", user,
         "-c",
         f'CREATE INDEX idx_{table_name}_geom ON "{schema}"."{table_name}" USING SPGiST (geom);'
     ]
@@ -107,12 +106,12 @@ def load_to_postgis(shapefile, layer_name, postgis_config):
         logging.error(f"Failed to create SPGiST index: {e.stderr}")
         raise
 
-    # Validate CRS
     validate_crs_cmd = [
         "psql",
         "-h", host,
         "-p", str(port),
         "-d", dbname,
+        "-U", user,
         "-c",
         f"SELECT Find_SRID('{schema}', '{table_name}', 'geom');"
     ]
@@ -122,12 +121,12 @@ def load_to_postgis(shapefile, layer_name, postgis_config):
         raise ValueError(f"CRS is not set to EPSG:2154 for table {table_name}.")
     logging.info(f"CRS validated as EPSG:2154 for table {table_name}.")
 
-    # Check field names for reserved words or invalid characters
     check_fields_cmd = [
         "psql",
         "-h", host,
         "-p", str(port),
         "-d", dbname,
+        "-U", user,
         "-c",
         rf'\d "{schema}"."{table_name}";'
     ]
@@ -138,12 +137,12 @@ def load_to_postgis(shapefile, layer_name, postgis_config):
             raise ValueError(f"Reserved word or invalid field name detected in table {table_name}.")
     logging.info(f"Field names validated successfully for table {table_name}.")
 
-    # Set ownership and grant privileges
     set_owner_cmd = [
         "psql",
         "-h", host,
         "-p", str(port),
         "-d", dbname,
+        "-U", user,
         "-c",
         f'ALTER TABLE "{schema}"."{table_name}" OWNER TO mahdi;'
     ]
@@ -152,6 +151,7 @@ def load_to_postgis(shapefile, layer_name, postgis_config):
         "-h", host,
         "-p", str(port),
         "-d", dbname,
+        "-U", user,
         "-c",
         f'GRANT ALL PRIVILEGES ON TABLE "{schema}"."{table_name}" TO mahdi;'
     ]
@@ -168,17 +168,20 @@ def process_preprocessed_shapefile(input_shp, postgis_config):
     Process a preprocessed shapefile by validating geometries and loading into PostGIS.
     """
     validate_file(input_shp)
+
     layer_name = get_layer_name(input_shp)
+
     validate_geometries(input_shp)
+
     load_to_postgis(input_shp, layer_name, postgis_config)
 
 def main():
-    # PostGIS configuration without password (handled by .pgpass)
     postgis_config = {
         "host": "localhost",
         "port": "5432",
         "dbname": "roofs",
         "user": "mahdi",
+        "password": "mahdi",
         "schema": "public"
     }
 
@@ -187,16 +190,16 @@ def main():
 
     # Find all matching shapefiles
     shapefiles = glob.glob(shapefile_pattern)
+
     if not shapefiles:
         logging.error(f"No shapefiles found matching the pattern: {shapefile_pattern}")
         return
 
     logging.info(f"Found {len(shapefiles)} shapefiles to process.")
 
-    # Process shapefiles in parallel
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = [executor.submit(process_preprocessed_shapefile, shp, postgis_config) for shp in shapefiles]
-
+        
         for future in futures:
             try:
                 future.result()
