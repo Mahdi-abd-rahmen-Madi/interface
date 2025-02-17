@@ -346,8 +346,8 @@ def batch_process_shapefiles(output_dir, output_format="shp", target_crs="EPSG:2
     """
     logging.info("Starting shapefile alignment with hardcoded paths...")
     os.makedirs(output_dir, exist_ok=True)
-    target_shapefile_path = "/home/mahdi/app/data/shapefiles/roof.shp"
-    reference_shapefile_path = "/home/mahdi/app/data/output/merged_polygons.shp"
+    target_shapefile_path = "/home/mahdi/interface/data/shapefiles/roof.shp"
+    reference_shapefile_path = "/home/mahdi/interface/data/output/merged_polygons.shp"
     process_shapefiles(
         target_shapefile_path,
         reference_shapefile_path,
@@ -367,7 +367,7 @@ if __name__ == "__main__":
     configure_logging()
     
     # Define output directory
-    output_dir = "/home/mahdi/app/data/output"
+    output_dir = "/home/mahdi/interface/data/output"
     
     # Run batch processing with hardcoded paths
     batch_process_shapefiles(output_dir, output_format="shp", target_crs="EPSG:2154", max_distance=25, min_area=1000)
