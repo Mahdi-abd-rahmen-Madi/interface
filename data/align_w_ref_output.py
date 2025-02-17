@@ -195,7 +195,7 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
         
         if best_match and best_overlap_ratio >= min_overlap_ratio:
             # The polygon has sufficient overlap with the reference polygon
-            attributes["align_stat"] = "aligned"
+            attributes["alignment"] = "aligned"
             attributes["ref_area"] = best_match.area
             attributes["overlap"] = best_overlap_ratio
             aligned_data.append({**attributes, "geometry": target_geom})
@@ -215,13 +215,13 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
                 adjusted_geom = translate_polygon_to_point(target_geom, new_centroid)
                 
                 # Add the adjusted polygon to the aligned data
-                attributes["align_stat"] = "adjusted"
+                attributes["alignment"] = "adjusted"
                 attributes["ref_area"] = nearest_ref.area
                 attributes["overlap"] = 0  # No overlap for adjusted polygons
                 aligned_data.append({**attributes, "geometry": adjusted_geom})
             else:
                 # No valid reference polygon found within the distance threshold, mark as "not_aligned"
-                attributes["align_stat"] = "not_aligned"
+                attributes["alignment"] = "not_aligned"
                 attributes["ref_area"] = 0
                 attributes["overlap"] = 0
                 unaligned_data.append({**attributes, "geometry": target_geom})
