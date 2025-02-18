@@ -132,7 +132,7 @@ def convert_shapefile_to_flatgeobuf(input_shapefile, output_flatgeobuf):
 
         # Step 3: Simplify geometries
         print("Simplifying geometries...")
-        simplified_gdf = simplify_geometries(gdf, tolerance=10)  # Adjust tolerance as needed
+        simplified_gdf = simplify_geometries(gdf, tolerance=1)  # Adjust tolerance as needed
 
         # Step 4: Compare original and simplified geometries
         print("Comparing original and simplified geometries...")
@@ -162,6 +162,6 @@ def convert_shapefile_to_flatgeobuf(input_shapefile, output_flatgeobuf):
 if __name__ == "__main__":
     
     input_shapefile = "/home/mahdi/interface/data/output/aligned_results_20250217_093030.shp"  # Replace with your shapefile path
-    output_flatgeobuf = "/home/mahdi/interface/data/output/simplifytolerance1.fgb"  # Replace with desired output path
+    output_flatgeobuf = "/home/mahdi/interface/data/output/tolerance1.fgb"  # Replace with desired output path
 
     convert_shapefile_to_flatgeobuf(input_shapefile, output_flatgeobuf)
