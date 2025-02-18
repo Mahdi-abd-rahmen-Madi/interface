@@ -3,6 +3,14 @@ from shapely.geometry import shape, Polygon
 from shapely.ops import unary_union
 from shapely.wkt import loads
 import matplotlib.pyplot as plt
+import os
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 def validate_and_repair_geometries(gdf):
     """
@@ -14,7 +22,8 @@ def validate_and_repair_geometries(gdf):
     Returns:
         GeoDataFrame: GeoDataFrame with repaired geometries.
     """
-    gdf['geometry'] = gdf['geometry'].apply(lambda geom: geom.buffer(0) if geom.is_valid else geom)
+    gdf['geometry'] = gdf['geometry'].apply(lambda geom: geom.buffer(0) if geom.is_valid else None)
+    gdf = gdf[gdf.geometry.notnull()]  # Drop invalid geometries
     return gdf
 
 
@@ -34,6 +43,25 @@ def simplify_geometries(gdf, tolerance=10):
     return simplified_gdf
 
 
+def simplify_for_zoom_levels(gdf, zoom_levels=[(0, 5, 100), (6, 10, 10), (11, 20, 1)]):
+    """
+    Simplify geometries for multiple zoom levels.
+
+    Parameters:
+        gdf (GeoDataFrame): Input GeoDataFrame.
+        zoom_levels (list of tuples): List of (min_zoom, max_zoom, tolerance) tuples.
+
+    Returns:
+        dict: Dictionary of simplified GeoDataFrames for each zoom level.
+    """
+    simplified_gdfs = {}
+    for min_zoom, max_zoom, tolerance in zoom_levels:
+        simplified_gdf = gdf.copy()
+        simplified_gdf['geometry'] = simplified_gdf['geometry'].simplify(tolerance)
+        simplified_gdfs[f"zoom_{min_zoom}_{max_zoom}"] = simplified_gdf
+    return simplified_gdfs
+
+
 def compare_simplified_geometries(original_gdf, simplified_gdf):
     """
     Compare original and simplified geometries.
@@ -47,15 +75,18 @@ def compare_simplified_geometries(original_gdf, simplified_gdf):
     """
     metrics = {
         "vertex_reduction": [],
-        "area_difference": [],
-        "max_distance": []
+        "area_difference": []
     }
+
+    valid_features = 0
 
     for idx, row in original_gdf.iterrows():
         original_geom = row['geometry']
         simplified_geom = simplified_gdf.loc[idx, 'geometry']
 
         if original_geom and simplified_geom:
+            valid_features += 1
+
             # 1. Vertex Count Reduction
             original_vertex_count = len(original_geom.exterior.coords) if hasattr(original_geom, 'exterior') else 0
             simplified_vertex_count = len(simplified_geom.exterior.coords) if hasattr(simplified_geom, 'exterior') else 0
@@ -68,9 +99,8 @@ def compare_simplified_geometries(original_gdf, simplified_gdf):
                 area_diff = abs(original_geom.area - simplified_geom.area) / original_geom.area
                 metrics["area_difference"].append(area_diff)
 
-            # 3. Maximum Distance Between Geometries
-            max_distance = original_geom.distance(simplified_geom)
-            metrics["max_distance"].append(max_distance)
+    if valid_features == 0:
+        logging.warning("No valid geometries found for metric calculation.")
 
     return metrics
 
@@ -101,13 +131,13 @@ def plot_comparison(original_gdf, simplified_gdf, output_image="comparison.png")
     print(f"Comparison plot saved to {output_image}")
 
 
-def convert_shapefile_to_flatgeobuf(input_shapefile, output_flatgeobuf):
+def convert_shapefile_to_flatgeobuf(input_shapefile, output_folder):
     """
-    Converts a shapefile to an optimized FlatGeobuf file and compares simplification results.
+    Converts a shapefile to multiple FlatGeobuf files for different zoom levels and calculates metrics.
 
     Parameters:
         input_shapefile (str): Path to the input shapefile.
-        output_flatgeobuf (str): Path to save the output FlatGeobuf file.
+        output_folder (str): Folder to save the output FlatGeobuf files.
     """
     try:
         print("Reading shapefile...")
@@ -117,55 +147,48 @@ def convert_shapefile_to_flatgeobuf(input_shapefile, output_flatgeobuf):
         print("Validating and repairing geometries...")
         gdf = validate_and_repair_geometries(gdf)
 
+        if len(gdf) == 0:
+            logging.error("No valid geometries found in the input shapefile.")
+            return
+
         # Step 2: Ensure CRS is EPSG:2154
         print("Ensuring CRS is EPSG:2154...")
         gdf = gdf.to_crs(epsg=2154)
 
-        # Step 3: Simplify geometries
-        print("Simplifying geometries...")
-        simplified_gdf = simplify_geometries(gdf, tolerance=1)  # Adjust tolerance as needed
+        # Step 3: Simplify geometries for multiple zoom levels
+        print("Simplifying geometries for multiple zoom levels...")
+        zoom_levels = [(0, 5, 100), (6, 10, 10), (11, 20, 1)]
+        simplified_gdfs = simplify_for_zoom_levels(gdf, zoom_levels)
 
-        # Step 4: Compare original and simplified geometries
-        print("Comparing original and simplified geometries...")
-        metrics = compare_simplified_geometries(gdf, simplified_gdf)
+        # Step 4: Export simplified geometries to FlatGeobuf files and calculate metrics
+        print("Exporting simplified geometries to FlatGeobuf and calculating metrics...")
+        for zoom_range, simplified_gdf in simplified_gdfs.items():
+            output_path = os.path.join(output_folder, f"{zoom_range}.fgb")
+            simplified_gdf.to_file(output_path, driver="FlatGeobuf")
+            print(f"Saved {output_path}")
 
-        # Print summary of metrics
-        print("\nComparison Metrics:")
-        if metrics["vertex_reduction"]:
-            avg_vertex_reduction = sum(metrics["vertex_reduction"]) / len(metrics["vertex_reduction"])
-            print(f"Average Vertex Reduction: {avg_vertex_reduction:.2%}")
-        else:
-            print("No vertex reduction data available.")
+            # Calculate and display metrics
+            metrics = compare_simplified_geometries(gdf, simplified_gdf)
+            if metrics["vertex_reduction"]:
+                avg_vertex_reduction = sum(metrics["vertex_reduction"]) / len(metrics["vertex_reduction"])
+                print(f"Zoom Range {zoom_range}: Average Vertex Reduction: {avg_vertex_reduction:.2%}")
+            else:
+                print(f"Zoom Range {zoom_range}: No vertex reduction data available.")
 
-        if metrics["area_difference"]:
-            avg_area_difference = sum(metrics["area_difference"]) / len(metrics["area_difference"])
-            print(f"Average Area Difference: {avg_area_difference:.2%}")
-        else:
-            print("No area difference data available.")
+            if metrics["area_difference"]:
+                avg_area_difference = sum(metrics["area_difference"]) / len(metrics["area_difference"])
+                print(f"Zoom Range {zoom_range}: Average Area Difference: {avg_area_difference:.2%}")
+            else:
+                print(f"Zoom Range {zoom_range}: No area difference data available.")
 
-        if metrics["max_distance"]:
-            max_distance = max(metrics["max_distance"])
-            print(f"Maximum Distance: {max_distance:.4f} meters")
-        else:
-            print("No maximum distance data available.")
-
-        # Step 5: Visualize comparison
-        print("Plotting comparison...")
-        plot_comparison(gdf, simplified_gdf, output_image="comparison.png")
-
-        # Step 6: Export to FlatGeobuf
-        print("Exporting to FlatGeobuf...")
-        simplified_gdf.to_file(output_flatgeobuf, driver="FlatGeobuf")
-
-        print(f"Conversion completed. Output saved to {output_flatgeobuf}")
+        print("Conversion completed.")
 
     except Exception as e:
-        print(f"An error occurred: {e}")
-
+        logging.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    
+    # Example usage
     input_shapefile = "/home/mahdi/interface/data/output/aligned_results_20250217_093030.shp"  # Replace with your shapefile path
-    output_flatgeobuf = "/home/mahdi/interface/data/output/tolerance1.fgb"  # Replace with desired output path
+    output_folder = "/home/mahdi/interface/data/output/multi/"      # Replace with desired output folder
 
-    convert_shapefile_to_flatgeobuf(input_shapefile, output_flatgeobuf)
+    convert_shapefile_to_flatgeobuf(input_shapefile, output_folder)
