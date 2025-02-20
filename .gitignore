@@ -6,6 +6,7 @@
 *.geojson
 *.fgb
 *.log
+*.mbtiles
 env/
 
 

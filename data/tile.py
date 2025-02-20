@@ -200,7 +200,7 @@ def convert_shapefile_to_vector_tiles(input_shapefile, output_folder, attribute=
 
 if __name__ == "__main__":
     # Example usage
-    input_shapefile = "/home/mahdi/interface/data/output/aligned_results_20250217_093030.shp"  # Replace with your shapefile path
+    input_shapefile = "/home/mahdi/interface/data/output/aligned_results_20250219_165037.shp"  # Replace with your shapefile path
     output_folder = "/home/mahdi/interface/data/output/Vector_tiles/"      # Replace with desired output folder
 
     convert_shapefile_to_vector_tiles(input_shapefile, output_folder, attribute="PROD_EURO/", num_classes=5, colormap="cividis")

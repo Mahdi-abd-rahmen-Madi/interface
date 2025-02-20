@@ -208,14 +208,14 @@ def convert_shapefile_to_postgis_tiles(input_shapefile, output_folder, connectio
 
         # Step 3: Drop unnecessary columns
         print("Dropping unnecessary attributes (reference_, overlap_ra)...")
-        gdf = drop_unnecessary_columns(gdf, columns_to_drop=['reference_', 'overlap_ra'])
+        gdf = drop_unnecessary_columns(gdf, columns_to_drop=['ref_area', 'overlap'])
 
         # Step 4: Round numeric columns
         print("Rounding numeric attributes (surface_ut, production, PROD_EURO)...")
         gdf = round_numeric_columns(gdf, columns_to_round={
             'surface_ut': 2,       # Round to 2 decimal places
-            'production': 3,       # Round to 3 decimal places
-            'PROD_EURO': 4         # Round to 4 decimal places
+            'production': 2,       # Round to 3 decimal places
+            'PROD_EURO/': 2         # Round to 4 decimal places
         })
 
         # Step 5: Split data by the "nom" attribute
@@ -233,9 +233,12 @@ def convert_shapefile_to_postgis_tiles(input_shapefile, output_folder, connectio
 
 
 if __name__ == "__main__":
+
+    from utils import check_dependencies
+    check_dependencies()
     # Example usage
-    input_shapefile = "/home/mahdi/interface/data/output/aligned_results_20250217_093030.shp"  # Replace with your shapefile path
+    input_shapefile = "/home/mahdi/interface/data/output/aligned_results_20250219_165037.shp"  # Replace with your shapefile path
     output_folder = "/home/mahdi/interface/data/output/Vector_tiles/"  # Replace with desired output folder
-    connection_string = "postgresql://mahdi:mahdi@localhost:5432/roof" #"postgresql://user:password@localhost:5432/mydb"   Replace with your PostGIS connection string
+    connection_string = "postgresql://mahdi:mahdi@localhost:5432/roofs" #"postgresql://user:password@localhost:5432/mydb"   Replace with your PostGIS connection string
 
     convert_shapefile_to_postgis_tiles(input_shapefile, output_folder, connection_string, schema="public", attribute="nom")
