@@ -2,7 +2,6 @@
 import os
 import glob
 import logging
-import geopandas as gpd
 from concurrent.futures import ThreadPoolExecutor
 from config import configure_pipeline
 from align import (
@@ -68,9 +67,13 @@ def main():
                 target_gdf,
                 reference_gdf.geometry.tolist(),
                 max_distance=config["alignment_config"]["max_distance"],
-                min_overlap_ratio=config["alignment_config"]["min_overlap_ratio"],
-                output_path=aligned_path  # Save aligned data explicitly
+                min_overlap_ratio=config["alignment_config"]["min_overlap_ratio"]
             )
+
+            # Save the aligned GeoDataFrame explicitly to a file
+            os.makedirs(os.path.dirname(aligned_path), exist_ok=True)
+            aligned_gdf.to_file(aligned_path)
+            logging.info(f"Aligned polygons saved to {aligned_path}.")
 
         # Step 6: Split aligned data by attribute and upload to PostGIS
         logging.info("Splitting aligned data by attribute and uploading to PostGIS...")
