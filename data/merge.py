@@ -3,15 +3,13 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 import os
 
-def merge_adjacent_small_polygons(input_shapefile, output_dir, min_area=1000):
+def merge_adjacent_small_polygons(input_shapefile, output_dir, min_area=100):
     """
     Merges adjacent polygons that are smaller than the specified minimum area.
-
     Args:
         input_shapefile (str): Path to the input shapefile.
         output_dir (str): Directory where the output shapefile will be saved.
         min_area (float): Minimum area threshold in square meters. Default is 1000.
-
     Returns:
         None: Saves the merged polygons to a new shapefile in the output directory.
     """
@@ -55,4 +53,4 @@ if __name__ == "__main__":
     output_dir = "/home/mahdi/interface/data/output"
 
     # Merge adjacent small polygons (< 1000 sqm) and save the result
-    merge_adjacent_small_polygons(reference_shapefile_path, output_dir, min_area=1000)
+    merge_adjacent_small_polygons(reference_shapefile_path, output_dir, min_area=100)
