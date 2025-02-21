@@ -18,7 +18,7 @@ def split_by_attribute(gdf, attribute="nom", output_folder="split_data"):
     """
     if attribute not in gdf.columns:
         raise ValueError(f"Attribute '{attribute}' not found in the dataset.")
-    
+
     os.makedirs(output_folder, exist_ok=True)
     fgb_paths = []
 
@@ -30,8 +30,7 @@ def split_by_attribute(gdf, attribute="nom", output_folder="split_data"):
 
     logging.info(f"Data split into {len(fgb_paths)} subsets based on '{attribute}'.")
     return fgb_paths
-
-
+    
 # split.py
 def upload_split_data_to_postgis(fgb_paths, connection_string, schema="public"):
     """
@@ -44,28 +43,32 @@ def upload_split_data_to_postgis(fgb_paths, connection_string, schema="public"):
     """
     from sqlalchemy import create_engine
 
+    engine = create_engine(connection_string)
+
     for fgb_path in fgb_paths:
         # Read FlatGeobuf file
-        subset_gdf = gpd.read_file(fgb_path)
+        try:
+            subset_gdf = gpd.read_file(fgb_path)
 
-        # Derive table name from the filename
-        table_name = os.path.splitext(os.path.basename(fgb_path))[0]
+            # Validate the GeoDataFrame
+            if not isinstance(subset_gdf, gpd.GeoDataFrame) or "nom" not in subset_gdf.columns:
+                raise ValueError(f"Invalid GeoDataFrame or missing 'nom' column in {fgb_path}.")
 
-        engine = create_engine(connection_string)
-        subset_gdf.to_postgis(
-            name=table_name,
-            con=engine,
-            schema=schema,
-            if_exists="replace",
-            index=False,
-            dtype={"geometry": "Geometry"}
-        )
+            # Derive table name from the filename
+            table_name = os.path.splitext(os.path.basename(fgb_path))[0]
 
-        # Log successful upload
-        logging.info(f"Uploaded data to PostGIS table: {schema}.{table_name}")
-
-        # Validate column names after upload
-        validate_columns_after_upload(engine, schema, table_name)
+            # Upload to PostGIS
+            subset_gdf.to_postgis(
+                name=table_name,
+                con=engine,
+                schema=schema,
+                if_exists="replace",
+                index=False,
+                dtype={"geometry": "Geometry"}
+            )
+            logging.info(f"Uploaded data to PostGIS table: {schema}.{table_name}")
+        except Exception as e:
+            logging.error(f"Failed to upload {fgb_path} to PostGIS: {e}")
 
 
 def validate_columns_after_upload(engine, schema, table_name):

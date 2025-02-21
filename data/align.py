@@ -114,7 +114,7 @@ def simplify_reference_polygons(reference_gdf, max_merge_distance=50):
 
     # Initialize an empty list to store merged polygons
     merged_polygons = []
-    attributes_list = []  # Preserve attributes
+    attributes_list = []  # Preserve attributes from original GeoDataFrame
 
     while not reference_gdf.empty:
         # Take the first polygon as the base for potential merging
@@ -126,8 +126,9 @@ def simplify_reference_polygons(reference_gdf, max_merge_distance=50):
             reference_gdf.geometry.distance(base_polygon.centroid) <= max_merge_distance
         ]
 
-        if len(candidates) > 1:
-            logging.info(f"Merging {len(candidates)} polygons into a single polygon.")
+        num_candidates = len(candidates)
+        if num_candidates > 1:
+            logging.info(f"Merged {num_candidates} polygons into a single polygon.")
 
             # Merge the base polygon with all candidates
             merged_polygon = unary_union([base_polygon] + candidates.geometry.tolist())
@@ -146,26 +147,28 @@ def simplify_reference_polygons(reference_gdf, max_merge_distance=50):
             reference_gdf = reference_gdf.drop(base_index)
 
     # Combine attributes and geometries into a new GeoDataFrame
-    result_gdf = gpd.GeoDataFrame(attributes_list, geometry=merged_polygons, crs=reference_gdf.crs)
+    simplified_gdf = gpd.GeoDataFrame(attributes_list, geometry=merged_polygons, crs=reference_gdf.crs)
 
     # Log the final number of polygons
-    final_polygon_count = len(result_gdf)
+    final_polygon_count = len(simplified_gdf)
     logging.info(f"Simplified {final_polygon_count} reference polygons.")
     logging.info(f"Reduced the number of polygons from {initial_polygon_count} to {final_polygon_count}.")
-    return result_gdf
+    return simplified_gdf
 
 
 # Step 5: Core Alignment Function with Distance Threshold
-# align.py
-def align_target_to_reference_inside(target_gdf, reference_polygons, max_distance=25, min_overlap_ratio=0.5):
+def align_target_to_reference_inside(target_gdf, reference_polygons, max_distance=25, min_overlap_ratio=0.5, output_path=None):
     """
     Align target polygons (roofs) to reference polygons by ensuring roofs are completely inside references.
+    If a roof polygon does not fully overlap but has sufficient overlap with a reference polygon, it will be marked as "aligned".
+    Otherwise, it may be adjusted or marked as "not_aligned".
     
     Args:
         target_gdf (GeoDataFrame): GeoDataFrame of the target shapefile (roofs).
         reference_polygons (list): List of Shapely Polygons from the reference shapefile.
         max_distance (float): Maximum allowable distance (in meters) to consider a reference polygon.
         min_overlap_ratio (float): Minimum ratio of target polygon area overlapping with reference polygon to be considered "aligned".
+        output_path (str): Optional path to save the aligned GeoDataFrame as a shapefile.
     
     Returns:
         GeoDataFrame: A GeoDataFrame containing aligned data with attributes and alignment status.
@@ -175,7 +178,7 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
 
     for idx, row in target_gdf.iterrows():
         target_geom = row.geometry
-        attributes = row.drop("geometry").to_dict()  # Preserve all attributes, including 'nom'
+        attributes = row.drop("geometry").to_dict()  # Preserve all attributes except geometry
 
         best_match = None
         best_overlap_ratio = 0.0
@@ -218,8 +221,11 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
     # Create a new GeoDataFrame for the aligned data
     aligned_gdf = gpd.GeoDataFrame(aligned_data, crs=target_gdf.crs)
 
-    # Debug: Log column names of the aligned GeoDataFrame
-    logging.debug(f"Aligned GeoDataFrame columns: {aligned_gdf.columns.tolist()}")
+    # Save the aligned GeoDataFrame to a shapefile if an output path is provided
+    if output_path:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        aligned_gdf.to_file(output_path)
+        logging.info(f"Aligned GeoDataFrame saved to {output_path}.")
 
     logging.info(f"Aligned {len(aligned_gdf)} target polygons.")
     return aligned_gdf

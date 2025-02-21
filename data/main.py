@@ -6,8 +6,10 @@ import geopandas as gpd
 from concurrent.futures import ThreadPoolExecutor
 from config import configure_pipeline
 from align import (
+    configure_logging as align_configure_logging,
     load_shapefiles,
     merge_small_adjacent_polygons,
+    simplify_reference_polygons,
     align_target_to_reference_inside
 )
 from split import (
@@ -30,18 +32,21 @@ def main():
         # Step 1: Load configuration
         config = configure_pipeline()
 
-        # Step 2: Load reference and target shapefiles
+        # Step 2: Configure alignment logging
+        align_configure_logging()
+
+        # Step 3: Load reference and target shapefiles
         logging.info("Loading reference and target shapefiles...")
         reference_gdf, _ = load_shapefiles(config["reference_shapefile"], config["reference_shapefile"])
 
-        # Step 3: Merge small adjacent polygons in the reference dataset
+        # Step 4: Merge small adjacent polygons in the reference dataset
         logging.info("Merging small adjacent polygons in the reference dataset...")
         simplified_reference_gdf = merge_small_adjacent_polygons(reference_gdf, min_area=config["min_area_threshold"])
         simplified_reference_path = os.path.join(config["output_dir"], "simplified_reference.shp")
         simplified_reference_gdf.to_file(simplified_reference_path)
         logging.info(f"Simplified reference polygons saved to {simplified_reference_path}.")
 
-        # Step 4: Align target polygons to the simplified reference polygons
+        # Step 5: Align target polygons to the simplified reference polygons
         logging.info("Aligning target polygons to the simplified reference polygons...")
         aligned_output_dir = os.path.join(config["output_dir"], "aligned")
         os.makedirs(aligned_output_dir, exist_ok=True)
@@ -56,20 +61,18 @@ def main():
             target_gdf, reference_gdf = load_shapefiles(target_shp, simplified_reference_path)
 
             # Align target polygons to reference polygons
+            aligned_filename = os.path.basename(target_shp).replace("aligned_results", "aligned")
+            aligned_path = os.path.join(aligned_output_dir, aligned_filename)
+
             aligned_gdf = align_target_to_reference_inside(
                 target_gdf,
                 reference_gdf.geometry.tolist(),
                 max_distance=config["alignment_config"]["max_distance"],
-                min_overlap_ratio=config["alignment_config"]["min_overlap_ratio"]
+                min_overlap_ratio=config["alignment_config"]["min_overlap_ratio"],
+                output_path=aligned_path  # Save aligned data explicitly
             )
 
-            # Save the aligned polygons to a new shapefile
-            aligned_filename = os.path.basename(target_shp).replace("aligned_results", "aligned")
-            aligned_path = os.path.join(aligned_output_dir, aligned_filename)
-            aligned_gdf.to_file(aligned_path)
-            logging.info(f"Aligned polygons saved to {aligned_path}.")
-
-        # Step 5: Split aligned data by attribute and upload to PostGIS
+        # Step 6: Split aligned data by attribute and upload to PostGIS
         logging.info("Splitting aligned data by attribute and uploading to PostGIS...")
 
         aligned_shapefiles = glob.glob(os.path.join(aligned_output_dir, "*.shp"))
@@ -80,6 +83,10 @@ def main():
         for aligned_shp in aligned_shapefiles:
             # Read aligned shapefile
             aligned_gdf = gpd.read_file(aligned_shp)
+
+            # Validate the presence of the 'nom' attribute
+            if config["split_attribute"] not in aligned_gdf.columns:
+                raise ValueError(f"'{config['split_attribute']}' attribute missing in aligned GeoDataFrame for {aligned_shp}.")
 
             # Split data by the specified attribute
             split_output_dir = os.path.join(config["output_dir"], "split_data")
