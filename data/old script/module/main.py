@@ -2,6 +2,7 @@
 import os
 import glob
 import logging
+import geopandas as gpd
 from concurrent.futures import ThreadPoolExecutor
 from config import configure_pipeline
 from align import (
@@ -18,13 +19,14 @@ from split import (
 
 # Configure logging for the main script
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("main.log"),
+        logging.FileHandler("debug.log"),
         logging.StreamHandler()
     ]
 )
+
 
 def main():
     try:

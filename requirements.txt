@@ -13,3 +13,6 @@ tqdm
 streamlit
 folium
 matplotlib
+sqlalchemy~=2.0.38
+psycopg2~=2.9.10
+geoalchemy~=0.17.1

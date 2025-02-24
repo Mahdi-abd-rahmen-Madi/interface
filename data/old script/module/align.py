@@ -1,9 +1,8 @@
 # align.py
-import os
 import logging
 import geopandas as gpd
-from shapely.geometry import Polygon, Point
-from shapely.ops import unary_union, nearest_points
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
 # Step 1: Configure Logging
 def configure_logging():
@@ -126,9 +125,8 @@ def simplify_reference_polygons(reference_gdf, max_merge_distance=50):
             reference_gdf.geometry.distance(base_polygon.centroid) <= max_merge_distance
         ]
 
-        num_candidates = len(candidates)
-        if num_candidates > 1:
-            logging.info(f"Merged {num_candidates} polygons into a single polygon.")
+        if len(candidates) > 1:
+            logging.info(f"Merged {len(candidates)} polygons into a single polygon.")
 
             # Merge the base polygon with all candidates
             merged_polygon = unary_union([base_polygon] + candidates.geometry.tolist())
@@ -157,21 +155,18 @@ def simplify_reference_polygons(reference_gdf, max_merge_distance=50):
 
 
 # Step 5: Core Alignment Function with Distance Threshold
-from shapely.geometry import Polygon
-
-def align_target_to_reference_inside(target_gdf, reference_polygons, max_distance=25, min_overlap_ratio=0.5, output_path=None):
+def align_target_to_reference_inside(target_gdf, reference_polygons, max_distance=25, min_overlap_ratio=0.5):
     """
     Align target polygons (roofs) to reference polygons by ensuring roofs are completely inside references.
     If a roof polygon does not fully overlap but has sufficient overlap with a reference polygon, it will be marked as "aligned".
     Otherwise, it may be adjusted or marked as "not_aligned".
-
+    
     Args:
         target_gdf (GeoDataFrame): GeoDataFrame of the target shapefile (roofs).
         reference_polygons (list): List of Shapely Polygons from the reference shapefile.
         max_distance (float): Maximum allowable distance (in meters) to consider a reference polygon.
         min_overlap_ratio (float): Minimum ratio of target polygon area overlapping with reference polygon to be considered "aligned".
-        output_path (str): Optional path to save the aligned GeoDataFrame as a shapefile.
-
+    
     Returns:
         GeoDataFrame: A GeoDataFrame containing aligned data with attributes and alignment status.
     """
@@ -222,11 +217,5 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
 
     # Create a new GeoDataFrame for the aligned data
     aligned_gdf = gpd.GeoDataFrame(aligned_data, crs=target_gdf.crs)
-
-    # Save the aligned GeoDataFrame to a shapefile if an output path is provided
-    if output_path:
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        aligned_gdf.to_file(output_path)
-        logging.info(f"Aligned polygons saved to {output_path}.")
-
+    logging.info(f"Created {len(aligned_gdf)} aligned records.")
     return aligned_gdf

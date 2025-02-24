@@ -3,7 +3,7 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 import os
 
-def merge_adjacent_small_polygons(input_shapefile, output_dir, min_area=100):
+def merge_adjacent_small_polygons(input_shapefile, output_dir, min_area=1000):
     """
     Merges adjacent polygons that are smaller than the specified minimum area.
     Args:

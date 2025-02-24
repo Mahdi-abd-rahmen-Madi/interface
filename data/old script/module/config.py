@@ -7,7 +7,7 @@ def configure_pipeline():
     """
     return {
         "reference_shapefile": "/home/mahdi/interface/data/shapefiles/reference.shp",
-        "target_shapefile_pattern": "/home/mahdi/interface/data/output/aligned/aligned_results*.shp",
+        "target_shapefile_pattern": "/home/mahdi/interface/data/output/aligned/aligned*.shp",
         "output_dir": "/home/mahdi/interface/data/output/aligned",
         "postgis_config": {
             "host": "localhost",

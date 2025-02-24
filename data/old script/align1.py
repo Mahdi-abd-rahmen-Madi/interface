@@ -157,8 +157,8 @@ def batch_process_shapefiles(output_dir, output_format="shp", target_crs="EPSG:2
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
     # Hardcoded paths
-    target_shapefile_path = "/home/mahdi/app/data/shapefiles/roof.shp"
-    reference_shapefile_path = "/home/mahdi/app/data/shapefiles/reference.shp"
+    target_shapefile_path = "/home/mahdi/interface/data/shapefiles/roof.shp"
+    reference_shapefile_path = "/home/mahdi/interface/data/shapefiles/reference.shp"
     # Process the shapefiles
     process_shapefiles(target_shapefile_path, reference_shapefile_path, output_dir, output_format=output_format, target_crs=target_crs)
     logging.info("Shapefile alignment completed.")
@@ -168,6 +168,6 @@ if __name__ == "__main__":
     # Configure logging
     configure_logging()
     # Define output directory
-    output_dir = "/home/mahdi/app/data/output"
+    output_dir = "/home/mahdi/interface/data/output"
     # Run batch processing with hardcoded paths
     batch_process_shapefiles(output_dir, output_format="shp", target_crs="EPSG:2154")
