@@ -19,6 +19,9 @@ MAX_MERGE_DISTANCE = 50
 # Dissolve buffer distance
 BUFFER_DISTANCE = 0.1
 
+# Splitting attribute
+SPLIT_ATTRIBUTE = "nom"  # Attribute used for splitting data
+
 # PostGIS connection string
 POSTGIS_CONNECTION_STRING = "postgresql://mahdi:mahdi@localhost:5432/roofs"
 POSTGIS_SCHEMA = "public"

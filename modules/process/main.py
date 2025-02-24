@@ -1,13 +1,21 @@
 # main.py
 
 import argparse
-import os 
+import os
 import geopandas as gpd
 import logging
 from align import load_shapefiles, simplify_reference_polygons, align_target_to_reference_inside
 from split import split_and_save, upload_to_postgis
 from utils import configure_logging, check_dependencies
-from config import TARGET_CRS, MIN_AREA_THRESHOLD, MAX_MERGE_DISTANCE, OUTPUT_FOLDER, POSTGIS_SCHEMA
+from config import (
+    TARGET_CRS,
+    MIN_AREA_THRESHOLD,
+    MAX_MERGE_DISTANCE,
+    OUTPUT_FOLDER,
+    POSTGIS_SCHEMA,
+    OUTPUT_FOLDER,
+    SPLIT_ATTRIBUTE,  # Import the splitting attribute
+)
 
 def main(target_path, reference_path):
     """
@@ -32,11 +40,13 @@ def main(target_path, reference_path):
     # Step 4: Save aligned results
     logging.info("Saving aligned results...")
     aligned_gdf = gpd.GeoDataFrame(aligned_results, crs=target_gdf.crs)
-    split_and_save(aligned_gdf, attribute="alignment")
+
+    # Use the attribute defined in config.py for splitting
+    split_and_save(aligned_gdf, attribute=SPLIT_ATTRIBUTE, output_folder=OUTPUT_FOLDER)
 
     # Step 5: Upload to PostGIS
     logging.info("Uploading data to PostGIS...")
-    upload_to_postgis(aligned_gdf, "aligned_roofs")
+    upload_to_postgis(aligned_gdf, table_name="aligned_roofs", schema=POSTGIS_SCHEMA)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Shapefile Alignment and Splitting Tool")

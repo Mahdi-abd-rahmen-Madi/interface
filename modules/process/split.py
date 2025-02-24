@@ -2,9 +2,9 @@
 import os
 import geopandas as gpd
 from sqlalchemy import create_engine
-from config import OUTPUT_FOLDER, POSTGIS_CONNECTION_STRING, POSTGIS_SCHEMA
+from config import OUTPUT_FOLDER, POSTGIS_CONNECTION_STRING, POSTGIS_SCHEMA, SPLIT_ATTRIBUTE
 
-def split_and_save(gdf, attribute="alignment"):
+def split_and_save(gdf, attribute=SPLIT_ATTRIBUTE, output_folder=OUTPUT_FOLDER):
     """
     Split a GeoDataFrame into smaller subsets based on the specified attribute.
     """
@@ -13,7 +13,7 @@ def split_and_save(gdf, attribute="alignment"):
         output_path = os.path.join(OUTPUT_FOLDER, f"{value}.fgb")
         subset.to_file(output_path, driver="FlatGeobuf")
 
-def upload_to_postgis(gdf, table_name):
+def upload_to_postgis(gdf, table_name, schema=POSTGIS_SCHEMA):
     """
     Upload a GeoDataFrame to PostGIS.
     """
