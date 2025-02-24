@@ -157,19 +157,21 @@ def simplify_reference_polygons(reference_gdf, max_merge_distance=50):
 
 
 # Step 5: Core Alignment Function with Distance Threshold
+from shapely.geometry import Polygon
+
 def align_target_to_reference_inside(target_gdf, reference_polygons, max_distance=25, min_overlap_ratio=0.5, output_path=None):
     """
     Align target polygons (roofs) to reference polygons by ensuring roofs are completely inside references.
     If a roof polygon does not fully overlap but has sufficient overlap with a reference polygon, it will be marked as "aligned".
     Otherwise, it may be adjusted or marked as "not_aligned".
-    
+
     Args:
         target_gdf (GeoDataFrame): GeoDataFrame of the target shapefile (roofs).
         reference_polygons (list): List of Shapely Polygons from the reference shapefile.
         max_distance (float): Maximum allowable distance (in meters) to consider a reference polygon.
         min_overlap_ratio (float): Minimum ratio of target polygon area overlapping with reference polygon to be considered "aligned".
         output_path (str): Optional path to save the aligned GeoDataFrame as a shapefile.
-    
+
     Returns:
         GeoDataFrame: A GeoDataFrame containing aligned data with attributes and alignment status.
     """
@@ -210,12 +212,12 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
                     nearest_ref = ref
 
             if nearest_ref and min_distance <= max_distance:
-                attributes["alignment"] = "nearby"
+                attributes["alignment"] = "adjusted"
                 attributes["nearest_ref_distance"] = min_distance
             else:
                 attributes["alignment"] = "not_aligned"
 
-        # Append the aligned polygon with its attributes
+        # Append the aligned/adjusted/not_aligned polygon to the result list
         aligned_data.append({**attributes, "geometry": target_geom})
 
     # Create a new GeoDataFrame for the aligned data
@@ -225,7 +227,6 @@ def align_target_to_reference_inside(target_gdf, reference_polygons, max_distanc
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         aligned_gdf.to_file(output_path)
-        logging.info(f"Aligned GeoDataFrame saved to {output_path}.")
+        logging.info(f"Aligned polygons saved to {output_path}.")
 
-    logging.info(f"Aligned {len(aligned_gdf)} target polygons.")
     return aligned_gdf

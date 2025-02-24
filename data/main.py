@@ -59,21 +59,24 @@ def main():
         for target_shp in target_shapefiles:
             target_gdf, reference_gdf = load_shapefiles(target_shp, simplified_reference_path)
 
-            # Align target polygons to reference polygons
-            aligned_filename = os.path.basename(target_shp).replace("aligned_results", "aligned")
+            # Define the output path for the aligned shapefile
+            aligned_filename = os.path.basename(target_shp).replace(".shp", "_aligned.shp")
             aligned_path = os.path.join(aligned_output_dir, aligned_filename)
 
+            # Align target polygons to reference polygons and save the result
             aligned_gdf = align_target_to_reference_inside(
                 target_gdf,
                 reference_gdf.geometry.tolist(),
                 max_distance=config["alignment_config"]["max_distance"],
-                min_overlap_ratio=config["alignment_config"]["min_overlap_ratio"]
+                min_overlap_ratio=config["alignment_config"]["min_overlap_ratio"],
+                output_path=aligned_path  # Save the aligned GeoDataFrame to a file
             )
-
-            # Save the aligned GeoDataFrame explicitly to a file
-            os.makedirs(os.path.dirname(aligned_path), exist_ok=True)
-            aligned_gdf.to_file(aligned_path)
             logging.info(f"Aligned polygons saved to {aligned_path}.")
+
+        # Save the aligned GeoDataFrame explicitly to a file
+        os.makedirs(os.path.dirname(aligned_path), exist_ok=True)
+        aligned_gdf.to_file(aligned_path)
+        logging.info(f"Aligned polygons saved to {aligned_path}.")
 
         # Step 6: Split aligned data by attribute and upload to PostGIS
         logging.info("Splitting aligned data by attribute and uploading to PostGIS...")
