@@ -3,11 +3,25 @@
 
 pyvenv.cfg
 
+/data/shapefiles
+*.CPG
+*.DBF
+*.PRJ
+*.SHP
+*.SHX
+*.cpg
+*.dbf
+*.prj
+*.qmd
+*.shx
 *.shp
 *.geojson
 *.fgb
 *.log
 *.mbtiles
+*.Identifier
+*.qml
+LICENSE.txt
 env/
 
 ### Python ###
