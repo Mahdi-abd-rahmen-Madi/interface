@@ -21,15 +21,19 @@ def validate_and_reproject(gdf, target_crs=2154):
 
 def drop_unnecessary_attributes(parcelles_gdf, communes_gdf):
     """
-    Drops unnecessary attributes from the GeoDataFrames.
+    Drops unnecessary attributes from the GeoDataFrames with case-insensitive matching.
     """
     print("Dropping unnecessary attributes...")
-    if "numero" in parcelles_gdf.columns:
-        parcelles_gdf = parcelles_gdf.drop(columns=["NUMERO"], errors="ignore")
-    if "feuille" in parcelles_gdf.columns:
-        parcelles_gdf = parcelles_gdf.drop(columns=["FEUILLE"], errors="ignore")
-    if "wikipedia" in communes_gdf.columns:
-        communes_gdf = communes_gdf.drop(columns=["wikipedia"], errors="ignore")
+    
+    # Case-insensitive column dropping
+    for col in parcelles_gdf.columns:
+        if col.lower() == "numero" or col.lower() == "feuille":
+            parcelles_gdf = parcelles_gdf.drop(columns=[col])
+            
+    for col in communes_gdf.columns:
+        if col.lower() == "wikipedia":
+            communes_gdf = communes_gdf.drop(columns=[col])
+            
     return parcelles_gdf, communes_gdf
 
 
@@ -140,9 +144,9 @@ def divide_parcelles_by_communes(parcelle_path, communes_path, output_path, num_
 
 
 if __name__ == "__main__":
-    parcelle_path = "/home/mahdi/interface/data/shapefiles/pq2/PARCELLE.SHP"
-    communes_path = "/home/mahdi/interface/data/shapefiles/pq2/communes-20220101.shp"
-    output_path = "/home/mahdi/interface/data/shapefiles/pq2/divided_parcelles_export.shp"  # Output as Shapefile
+    parcelle_path = "/home/mahdi/interface/data/raw/pq2/PARCELLE.SHP"
+    communes_path = "/home/mahdi/interface/data/raw/pq2/communes-20220101.shp"
+    output_path = "/home/mahdi/interface/data/output/divide/divide.shp"  # Output as Shapefile
 
     # Run the division process with multiprocessing
     divide_parcelles_by_communes(
