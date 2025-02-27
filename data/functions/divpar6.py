@@ -50,8 +50,9 @@ def validate_and_reproject(gdf, target_crs=2154):
 def drop_unnecessary_attributes(divided_roofs_gdf, parcelles_gdf):
     """
     Drops unnecessary attributes from the GeoDataFrames with case-insensitive matching.
+    Only removes problematic columns while preserving important ones.
     """
-    print("Dropping unnecessary attributes...")
+    print("Checking attributes...")
 
     # Print column names for debugging
     print(f"Divided roofs columns: {divided_roofs_gdf.columns.tolist()}")
@@ -62,11 +63,13 @@ def drop_unnecessary_attributes(divided_roofs_gdf, parcelles_gdf):
         print("Renaming 'fid' column to 'original_fid' to avoid conflicts")
         divided_roofs_gdf = divided_roofs_gdf.rename(columns={'fid': 'original_fid'})
 
-    # Case-insensitive column dropping for parcelles
-    for col in parcelles_gdf.columns:
-        if col.lower() in ["nom"]:
-            parcelles_gdf = parcelles_gdf.drop(columns=[col])
-
+    # Only drop specific problematic columns (instead of reducing to a small subset)
+    problematic_columns = ["nom", "NOM"]  # Add other problematic columns here if needed
+    columns_to_drop = [col for col in parcelles_gdf.columns if col in problematic_columns]
+    if columns_to_drop:
+        print(f"Dropping problematic columns: {columns_to_drop}")
+        parcelles_gdf = parcelles_gdf.drop(columns=columns_to_drop)
+    
     return divided_roofs_gdf, parcelles_gdf
 
 # Save chunk to file (with fallback to Shapefile if GeoPackage isn't available)
@@ -205,9 +208,13 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, f
         reprojection_end = time.time()
         print(f"CRS reprojection completed in {reprojection_end - reprojection_start:.2f} seconds.")
 
-        # Step 3: Drop unnecessary attributes
-        print("Dropping unnecessary attributes...")
+        # Step 3: Check for unnecessary attributes
+        print("Checking for unnecessary attributes...")
         divided_roofs, parcelles = drop_unnecessary_attributes(divided_roofs, parcelles)
+        
+        # Print columns being kept to verify
+        print(f"Keeping all columns from divided_roofs: {divided_roofs.columns.tolist()}")
+        print(f"Keeping all columns from parcelles: {parcelles.columns.tolist()}")
 
         # Step 4: Create spatial indexes
         print("Creating spatial indexes...")
@@ -216,10 +223,6 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, f
         parcelles.sindex
         index_end = time.time()
         print(f"Spatial index creation completed in {index_end - index_start:.2f} seconds.")
-
-        # Step 5: Reduce parcelles to necessary attributes
-        print("Reducing parcelles to necessary attributes...")
-        parcelles = parcelles[['geometry', 'SECTION', 'CODE_DEP', 'CODE_COM']]  # Keep only necessary columns
 
         # Step 6: Prepare for parallel processing
         print("Preparing for parallel processing...")
@@ -343,6 +346,9 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, f
             print(f"Result combination completed in {combine_end - combine_start:.2f} seconds.")
             print(f"Final result has {len(result)} features.")
 
+            # Print column names that were preserved in the final result
+            print(f"Columns in final result: {result.columns.tolist()}")
+
         # Step 9: Save the result to a new shapefile
         output_dir = Path(output_path).parent
         if not output_dir.exists():
@@ -381,7 +387,7 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, f
 if __name__ == "__main__":
     divided_roofs_path = "/home/mahdi/interface/data/output/divide/filtered_roofs/filtered.shp"
     parcelles_path = "/home/mahdi/interface/data/raw/pq2/PARCELLE.SHP"
-    output_path = "/home/mahdi/interface/data/output/divide/roofs_divided_by_parcelles60.shp"
+    output_path = "/home/mahdi/interface/data/output/divide/roofs_divided_by_parcelles61.shp"
     failed_chunks_dir = "/home/mahdi/interface/data/output/divide/failed"
     
     # Run the division process with multiprocessing
