@@ -6,6 +6,10 @@ from tqdm import tqdm
 import time
 import tempfile
 from pathlib import Path
+import os
+import psutil  # For memory monitoring
+import signal
+import shutil  # For saving failed chunks
 
 # Geospatial library imports
 import geopandas as gpd
@@ -17,6 +21,19 @@ import warnings
 
 # Suppress UserWarnings related to keep_geom_type
 warnings.filterwarnings("ignore", category=UserWarning, message="`keep_geom_type=True` in overlay resulted in.*")
+
+# Custom timeout exception
+class TimeoutException(Exception):
+    pass
+
+def timeout_handler(signum, frame):
+    raise TimeoutException("Processing timed out")
+
+# Memory monitoring function
+def get_memory_usage():
+    """Returns current memory usage in MB"""
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / 1024 / 1024
 
 # Validate and reproject CRS
 def validate_and_reproject(gdf, target_crs=2154):
@@ -45,14 +62,9 @@ def drop_unnecessary_attributes(divided_roofs_gdf, parcelles_gdf):
         print("Renaming 'fid' column to 'original_fid' to avoid conflicts")
         divided_roofs_gdf = divided_roofs_gdf.rename(columns={'fid': 'original_fid'})
 
-    # Case-insensitive column dropping for divided roofs
-    for col in divided_roofs_gdf.columns:
-        if col.lower() in ["unused1", "unused2"]:  # Replace with actual columns to drop
-            divided_roofs_gdf = divided_roofs_gdf.drop(columns=[col])
-
     # Case-insensitive column dropping for parcelles
     for col in parcelles_gdf.columns:
-        if col.lower() in ["numero", "feuille"]:
+        if col.lower() in ["nom"]:
             parcelles_gdf = parcelles_gdf.drop(columns=[col])
 
     return divided_roofs_gdf, parcelles_gdf
@@ -78,28 +90,95 @@ def save_chunk_to_file(chunk, temp_dir, index):
 
     return temp_path
 
-# Process intersection from file
+# Process intersection from file with spatial filtering and detailed logging
 def process_intersection_from_file(temp_path, parcelles_gdf):
     """
-    Processes the intersection for a single chunk loaded from a file.
+    Processes the intersection for a single chunk loaded from a file with spatial filtering.
     """
     try:
-        print(f"Starting processing for {temp_path}")
-        divided_roofs_chunk = gpd.read_file(temp_path)
-        print(f"Loaded chunk with {len(divided_roofs_chunk)} features, performing overlay...")
-        result = gpd.overlay(
-            divided_roofs_chunk, 
-            parcelles_gdf, 
-            how='intersection', 
-            keep_geom_type=False
-        )
-        print(f"Overlay complete for {temp_path}, filtering results...")
-        # Rest of your function
-        # ...
+        chunk_id = Path(temp_path).stem
+        print(f"[{chunk_id}] Starting processing")
+
+        # Load the chunk
+        try:
+            divided_roofs_chunk = gpd.read_file(temp_path)
+            print(f"[{chunk_id}] Loaded chunk with {len(divided_roofs_chunk)} features")
+        except Exception as e:
+            print(f"[{chunk_id}] Error loading chunk: {e}")
+            return gpd.GeoDataFrame(geometry=[])
+
+        # Spatial filtering
+        try:
+            minx, miny, maxx, maxy = divided_roofs_chunk.total_bounds
+            relevant_parcelles = parcelles_gdf.cx[minx:maxx, miny:maxy]
+            print(f"[{chunk_id}] Filtered from {len(parcelles_gdf)} to {len(relevant_parcelles)} relevant parcelles")
+        except Exception as e:
+            print(f"[{chunk_id}] Error during spatial filtering: {e}")
+            return gpd.GeoDataFrame(geometry=[])
+        if len(relevant_parcelles) == 0:
+            print(f"[{chunk_id}] No relevant parcels found. Skipping...")
+            return gpd.GeoDataFrame(geometry=[])
+
+        # Perform overlay with error handling
+        try:
+            print(f"[{chunk_id}] Performing overlay...")
+            result = gpd.overlay(
+                divided_roofs_chunk,
+                relevant_parcelles,
+                how='intersection'
+            )
+            print(f"[{chunk_id}] Overlay complete, got {len(result)} features")
+        except Exception as e:
+            print(f"[{chunk_id}] Error during overlay: {e}")
+            return gpd.GeoDataFrame(geometry=[])
+
+        # Filter by geometry type
+        try:
+            # Check for non-polygon geometries
+            non_polys = result[~result.geometry.type.isin(['Polygon', 'MultiPolygon'])]
+            if len(non_polys) > 0:
+                print(f"[{chunk_id}] Found {len(non_polys)} non-polygon geometries: {non_polys.geometry.type.value_counts().to_dict()}")
+                result = result[result.geometry.type.isin(['Polygon', 'MultiPolygon'])]
+
+            # Check for empty geometries
+            empties = result[result.geometry.is_empty]
+            if len(empties) > 0:
+                print(f"[{chunk_id}] Removing {len(empties)} empty geometries")
+                result = result[~result.geometry.is_empty]
+
+            print(f"[{chunk_id}] Final filtered result has {len(result)} features")
+        except Exception as e:
+            print(f"[{chunk_id}] Error during geometry filtering: {e}")
+
         return result
     except Exception as e:
         print(f"Error processing chunk {temp_path}: {e}")
         return gpd.GeoDataFrame(geometry=[])
+
+# Process with timeout
+def process_with_timeout(func, temp_path, parcelles_gdf, timeout=300):
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(timeout)
+    try:
+        return func(temp_path, parcelles_gdf)
+    except TimeoutException:
+        print(f"Processing timed out for {temp_path}")
+        return gpd.GeoDataFrame(geometry=[])
+    finally:
+        signal.alarm(0)
+
+# Save failed chunks
+def save_failed_chunk(temp_file, failed_dir):
+    """
+    Saves a problematic chunk file to the failed directory.
+    """
+    try:
+        os.makedirs(failed_dir, exist_ok=True)
+        failed_path = os.path.join(failed_dir, os.path.basename(temp_file))
+        print(f"Saving problematic chunk to {failed_path}")
+        shutil.copy(temp_file, failed_path)
+    except Exception as e:
+        print(f"Error saving failed chunk {temp_file}: {e}")
 
 # Main function to divide roofs by parcelles
 def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, num_processes=None):
@@ -108,6 +187,7 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, n
     """
     try:
         start_time = time.time()
+
         # Step 1: Load the shapefiles
         print("Loading shapefiles...")
         load_start = time.time()
@@ -138,14 +218,18 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, n
         index_end = time.time()
         print(f"Spatial index creation completed in {index_end - index_start:.2f} seconds.")
 
-        # Step 5: Prepare for parallel processing
+        # Step 5: Reduce parcelles to necessary attributes
+        print("Reducing parcelles to necessary attributes...")
+        parcelles = parcelles[['geometry', 'SECTION', 'CODE_DEP', 'CODE_COM']]  # Keep only necessary columns
+
+        # Step 6: Prepare for parallel processing
         print("Preparing for parallel processing...")
         if num_processes is None:
             num_processes = mp.cpu_count()
 
         print(f"Using {num_processes} processes for parallel computation.")
         # Split the divided_roofs into chunks - smaller chunks for better memory management
-        chunk_size = max(len(divided_roofs) // (num_processes * 8), 1)
+        chunk_size = max(len(divided_roofs) // (num_processes * 16), 1)  # Reduced chunk size further
         divided_roofs_chunks = [divided_roofs[i:i + chunk_size] for i in range(0, len(divided_roofs), chunk_size)]
         print(f"Split data into {len(divided_roofs_chunks)} chunks, each with approximately {chunk_size} features.")
 
@@ -168,29 +252,46 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, n
             print(f"Successfully saved {len(temp_files)} chunk files.")
 
             # Define a partial function for parallel processing
-            func = partial(process_intersection_from_file, parcelles_gdf=parcelles)
+            func = partial(process_with_timeout, process_intersection_from_file, parcelles_gdf=parcelles)
 
-            # Step 6: Perform the intersection in parallel
+            # Before starting intersection
+            print(f"Memory usage before intersection: {get_memory_usage():.2f} MB")
+
+            # Step 7: Perform the intersection in parallel
             print(f"Performing intersection using {num_processes} cores...")
-            intersection_start = time.time()
+            results = []
+            failed_dir = "/home/mahdi/interface/data/output/divide/failed"
             with mp.Pool(num_processes) as pool:
-                results = list(tqdm(pool.imap(func, temp_files), total=len(temp_files), desc="Processing chunks"))
-            intersection_end = time.time()
-            print(f"Intersection completed in {intersection_end - intersection_start:.2f} seconds.")
+                for i, temp_file in enumerate(temp_files):
+                    print(f"Processing chunk {i+1}/{len(temp_files)}, memory: {get_memory_usage():.2f} MB")
+                    result = pool.apply_async(func, args=(temp_file,))
+                    results.append(result)
+
+                # Get results with progress tracking
+                processed_results = []
+                for i, result in enumerate(results):
+                    try:
+                        print(f"Getting result for chunk {i+1}/{len(results)}, memory: {get_memory_usage():.2f} MB")
+                        processed_result = result.get(timeout=600)  # 10 minute timeout
+                        processed_results.append(processed_result)
+                    except Exception as e:
+                        print(f"Error getting result for chunk {i+1}: {e}")
+                        processed_results.append(gpd.GeoDataFrame(geometry=[]))
+                        save_failed_chunk(temp_file, failed_dir)
 
             # Check if any result is empty
-            empty_results = sum(1 for r in results if len(r) == 0)
+            empty_results = sum(1 for r in processed_results if len(r) == 0)
             if empty_results > 0:
-                print(f"Warning: {empty_results} out of {len(results)} result chunks are empty.")
+                print(f"Warning: {empty_results} out of {len(processed_results)} result chunks are empty.")
 
-            # Step 7: Combine the results
+            # Step 8: Combine the results
             print("Combining results...")
             combine_start = time.time()
-            if all(len(r) == 0 for r in results):
+            if all(len(r) == 0 for r in processed_results):
                 print("Error: All result chunks are empty. No intersections found.")
                 return
 
-            non_empty_results = [r for r in results if len(r) > 0]
+            non_empty_results = [r for r in processed_results if len(r) > 0]
             if len(non_empty_results) == 0:
                 print("Error: No non-empty results found.")
                 return
@@ -201,7 +302,7 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, n
             print(f"Result combination completed in {combine_end - combine_start:.2f} seconds.")
             print(f"Final result has {len(result)} features.")
 
-        # Step 8: Save the result to a new shapefile
+        # Step 9: Save the result to a new shapefile
         output_dir = Path(output_path).parent
         if not output_dir.exists():
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -233,9 +334,9 @@ def divide_roofs_by_parcelles(divided_roofs_path, parcelles_path, output_path, n
 
 
 if __name__ == "__main__":
-    divided_roofs_path = "/home/mahdi/interface/data/output/divide/roofs_divided_by_communes.shp"
+    divided_roofs_path = "/home/mahdi/interface/data/output/divide/filtered_roofs/filtered.shp"
     parcelles_path = "/home/mahdi/interface/data/raw/pq2/PARCELLE.SHP"
-    output_path = "/home/mahdi/interface/data/output/divide/roofs_divided_by_parcelles12.shp"
+    output_path = "/home/mahdi/interface/data/output/divide/roofs_divided_by_parcelles30.shp"
     # Run the division process with multiprocessing
     divide_roofs_by_parcelles(
         divided_roofs_path,
